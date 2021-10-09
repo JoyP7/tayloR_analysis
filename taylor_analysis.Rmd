@@ -1,0 +1,417 @@
+---
+title: 'TayloR Notebook: Spotify and Youttube'
+output:
+  html_document:
+    df_print: paged
+---
+
+This is my second personal project using data pulled from Spotify. Since my first project showed that Taylor Swift dominated my listening time on the app, I will focus on her in this analysis. Here, I would like to do an analysis on each of Taylor's albums, its audio features. Plus, I'll add more data from her Youtube channel as well.
+
+To get data from Spotify, I used `spotifyr`. You can find more examples about what you can do with this library in this repository: [spotifyr](https://github.com/charlie86/spotifyr)
+
+For data from Youtube, I used a library name `tuber`. Read more about this package at its GitHub [tuber](https://github.com/soodoku/tuber)
+
+# Set up
+
+Loading necessary libraries
+
+```{r libraries, echo=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(ggridges)
+library(viridis)
+library(lubridate)
+library(tidyverse)
+library(ggplot2)
+library(spotifyr)
+library(tuber)
+library(plotly)
+library(knitr)
+library(gghighlight)
+library(gridExtra)
+library(kableExtra)
+library(tuber)
+```
+
+# Spotify
+
+## Which album has the lowest mean valence score, a.k.a most depressed one? Can valence truly tell how happy a song is?
+
+According to *Spotify*:
+
+- `valence`: _A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry)._
+
+It's an intriguing feature of a song and, I want to know which of Taylor's albums has the lowest mean valence, a.k.a *Which is her saddest album?*
+
+Also, it's bugging me if *valence* is indeed a good measurement of how happy a song is. So, I want to use this chance to test my theory about this value.
+
+```{r Mean valence, message=FALSE, warning=FALSE}
+official_albums <- read_csv("/Users/joypham/LearningData/LearningR/spotify_extract/official_albums.csv", col_names = TRUE)
+
+# Mean valence
+albums_mean_scores <- official_albums %>% 
+  group_by(album_name, album_release_year) %>% 
+  summarize(mean_dance= round(mean(danceability),3), mean_energy= round(mean(energy),3), mean_valence= round(mean(valence),3)) %>% 
+  arrange(album_release_year)
+
+# Using this to lock the album name order as release year 
+albums_mean_scores$album_name <- factor(albums_mean_scores$album_name, levels = albums_mean_scores$album_name)
+
+
+ggplot(albums_mean_scores, aes(x= album_name, y= mean_valence, color= album_name)) +
+  geom_segment(aes(x= album_name, xend= album_name, y= 0, yend= mean_valence)) +
+  geom_point(size= 2, color= "cyan3") +
+  scale_color_viridis(discrete= TRUE, guide= FALSE, option="D") +
+  theme_light() +
+  theme (
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank(),
+  ) +
+  labs(title = "Average valence per album") +
+  xlab("") +
+  ylab("Valence") +
+  coord_flip()
+```
+
+None of her albums have *valence* score higher than 0.5! I've been listening to Taylor for more than 10 years but I never thought her music could be on this solemn level. **reputation** indeed has the lowest mean valence score which proved her point when she said *the old Taylor is dead*. 
+
+However, is that true that her music is that depressing?
+
+```{r Valence scale, message=FALSE, warning=FALSE}
+# Valence scale
+official_albums %>% 
+  group_by(album_name, album_release_year) %>% 
+  arrange(album_release_year)
+
+# Using this to lock the album name order as release year  
+official_albums$album_name <- factor(official_albums$album_name, levels = rev(unique(official_albums$album_name)))
+
+  
+ggplot(official_albums, aes(y = album_name, x = valence, fill = ..x..)) + 
+  geom_density_ridges_gradient(scale = 0.6) + 
+  scale_fill_gradient(low= "white", high= "deepskyblue4") +
+  theme_light() + 
+  theme(panel.background = element_rect(fill = "white")) +
+  theme(plot.background = element_rect(fill = "white")) +
+  xlim(0,1) +
+  ylab("") +
+  theme(legend.position = "none") 
+
+```
+
+Here we have a better look at the valence value of each album. *reputation* falls mostly on the left side of the plot, with no song score more than 0.6! Even all-about-love *Lover* hardly gets over 0.75. One interesting thing is that *Speak Now* and *Red* are bi-modal, each has two maxims.
+
+So, what are the most cheerful, happiest songs?
+
+```{r Most cheerful songs, message=FALSE, warning=FALSE}
+# Most cheerful songs
+official_albums %>% 
+  select(track_name, album_name, valence) %>% 
+  top_n(10) %>% 
+  arrange(-valence) %>% 
+  kbl() %>% 
+  kable_paper(full_width = F) %>% 
+  row_spec(row= 1:10, background = "#BF1363", color = "white")
+
+```
+
+*Speak Now*, *Lover* and, *Red* each have two songs within the top 10 cheerful tracks. It's true in the ridgeline plot above that these albums have more songs on the right side of the graph than the rest. Taylor's most euphoric song is no other than *Shake It Off*. Even though she made her clear intention in the transition album *Red*, I still had to check twice when I saw "Shake It Off", if it was Taylor singing. 
+
+It's interesting that while both *Hey Stephen* are on the list, the latest one is a bit less cheerful.
+
+Taylor indeed wrote lots of breaking-up songs but, I think it's wrong to say her music is mostly about sadness. *Valence* is an interesting value but it's not enough to measure how cheerful a song is. For instance, a deeply-in-love song like "Enchanted" has only 0.208 on valence, "Lover" with 0.453 while heart-breaking "hoax" scores 0.429. And, this somehow proves my theory about valence, that the value its self is rather about the musical positiveness, regardless of lyrics.
+
+
+## Which album is the most energetic and "danceable"?
+
+With the result above, I guess that most of Taylor's songs are not energetic or "danceable".
+
+According to *Spotify*:
+
+- `energy`: _Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy._
+
+- `danceability`: _Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is the most danceable._
+
+```{r Energy and danceability, message=FALSE, warning=FALSE}
+#Energy and danceability
+
+# Using this to lock the album name order as release year  
+official_albums$album_name <- factor(official_albums$album_name, levels = rev(unique(official_albums$album_name)))
+
+ggplot(official_albums, aes(x= energy, y= danceability, color= album_name)) +
+  geom_jitter() +
+  scale_color_viridis(discrete= TRUE, option="C") +
+  geom_vline(xintercept = 0.5) +
+  geom_hline(yintercept = 0.5) +
+  scale_x_continuous(breaks= seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks= seq(0, 1, 0.1)) +
+  labs(title= "How energetic and danceable are Taylor's songs?") +
+  theme_light()
+
+```
+
+What a surprise! There are more songs on the upper right than in other parts of the plot. Despite the solemn view of valence, Taylor's songs indeed more sound energetic and "danceable". Most songs from *1989* are high-energy and suitable for dancing with *reputation* coming in second. That makes sense since these two are her biggest effort into pop, while those from her indie-alternative albums *folklore* and *evermore* tends to take place on the left side of the graph.
+
+## How popular Taylor music on Spotify is?
+
+Taylor Swift is a big artist, we all know that. She also has a long long list of music awards with *Swifties* is one of the biggest fan bases in the world. Yet, as per my observation, she hardly dominates any hot charts. So, it's intriguing to see if her music is popular.
+
+```{r Popularity, message=FALSE, warning=FALSE}
+# Popularity per album
+official_albums %>% 
+  group_by(album_name, album_release_year) %>% 
+  arrange(album_release_year)
+
+# Using this to lock the album name order as release year  
+official_albums$album_name <- factor(official_albums$album_name, levels = rev(unique(official_albums$album_name)))
+
+  
+ggplot(official_albums, aes(y = album_name, x = popularity, fill = ..x..)) + 
+  geom_density_ridges_gradient(scale = 0.6) + 
+  scale_fill_gradient(low= "white", high= "darkorange") +
+  theme_light() + 
+  theme(panel.background = element_rect(fill = "white")) +
+  theme(plot.background = element_rect(fill = "white")) +
+  ylab("") +
+  theme(legend.position = "none")
+```
+
+
+According to this chart, Taylor's 3 most popular albums are *reputation*, *Lover* and, recently Grammy-awarded *folklore*. However, before "reputation", when she was still under Big Machine labels, each of her albums would have at least 2 versions and were countries/ regions depended released. Besides, they are just too old. Hence, I doubt that these figures are correct. However, the number from her latest 5 albums would be more reliable.
+
+Despite the limit of this data set, I'm still curious to know what are her most popular tracks.
+
+```{r Top popular tracks, message=FALSE, warning=FALSE}
+# Top popular tracks
+official_albums %>% 
+  select(track_name, album_name, popularity) %>% 
+  arrange(-popularity) %>%
+  top_n(10) %>% 
+  kbl() %>% 
+  kable_paper(full_width = F) %>% 
+  row_spec(row= 1:12, background = "#BF1363", color = "white")
+```
+
+Even though I chose the top 10, it's 12 songs and only one of them is from the "old Taylor era". With *august* and *Wildest Dreams* at the top of the chart is quite a surprise to me. Wait, no "betty"!
+
+## In comparison with other artists in Spotify Top 200
+
+In other to have a clearer look at how popular Taylor Swift is on Spotify, I'm going to data from Spotify Top 200 data set from Kaggle. You can find the file [here](https://www.kaggle.com/sashankpillai/spotify-top-200-charts-20202021). The data set was collected from 2019-12-20 to 2021-07-23.
+
+```{r Loading Spotify top 200, echo=TRUE, message=FALSE, warning=FALSE}
+#Loading Spotify top 200
+spotify <- read_csv("/Users/joypham/LearningData/LearningR/top200_spotify_2020_2021/spotify_dataset.csv", col_names = TRUE)
+```
+
+### Songs in top 10
+
+Let's see how many song of Taylor made it to top 10 of the chart.
+
+```{r Taylor in top 10, message=FALSE, warning=FALSE}
+#Taylor in top 10
+spotify %>% 
+  select(Song_Name, Artist, Highest_Charting_Position, Streams) %>% 
+  filter(Artist== "Taylor Swift", Highest_Charting_Position <= 10) %>% 
+  arrange(Highest_Charting_Position) %>% 
+  kbl() %>% 
+  kable_paper(full_width= F) %>% 
+  row_spec(row= 1:8, background= "#00A19D", color= "#FFF8E5")
+
+```
+
+Throughout this period, 18 songs were able to top the chart and one of them was *cardigan*. All songs in the chart are from  3 of Taylor's latest albums. That makes sense since it's the nature of a rapidly changing chart like Spotify 200; it's pop culture! By the way, I believe there are more Taylor's songs in this chart.
+
+```{r Taylor in top 200, message=FALSE, warning=FALSE}
+#Taylor in top 200
+spotify %>% 
+  group_by(Artist, Artist_Followers) %>% 
+  filter(Artist== "Taylor Swift") %>% 
+  summarize(Song_Count= n()) %>% 
+  kbl() %>% 
+  kable_paper(full_width= F) %>% 
+  row_spec(row= 1, background= "#00A19D", color= "#FFF8E5")
+  
+```
+
+Taylor got 52 songs in a pool of 1556 songs. Was it a big number compared with other artists in the chart? How large is the number of her followers?
+
+### Songs and followers comparison
+
+Lots of big names are in Spotify 200 and here I only include those with more than 10 songs in the chart.
+
+```{r Song and followers comparison, message=FALSE, warning=FALSE}
+spotify %>% 
+  group_by(Artist, Artist_Followers) %>%
+  summarize(Songs = n(), Streams = sum(Streams)/1000000, Followers = mean(Artist_Followers)/ 1000000) %>% 
+  arrange(desc(Songs)) %>% 
+  filter(Songs >= 10) %>% 
+  ggplot(aes(y = Songs, x = Followers, color = Artist, size = Streams)) +
+  geom_point(alpha = 0.6) +
+  scale_size(range = c(.1, 8), name="Streams in millions") +
+  scale_color_viridis(discrete = TRUE, option= "D") +
+  labs(title = "Total songs versus followers and streams", caption = "Data: Spotify Top 200 2020-2021") +
+  annotate("text", x = 48, y = 49, label = "Taylor Swift", color="maroon", fontface = "italic") +
+  ylab("Total songs") +
+  xlab("Followers in millions") +
+  theme_light()
+```
+
+There she is, lonely on the top! Only 22 artists had more than 10 songs and, with 52 songs got their place in Spotify 200, Taylor no doubt dominated the *Songs and Streams* challenge. Another thing worth mentioning is that she is also in 5 artists with the most followers. She's surely one of the titans here.
+
+### Streams
+
+There is an interesting variable in this data set, *Streams*, the approximate number of streams the song has as of the time this data was made. While we are at it, why not see out of 52 songs, which ones have the most streams.
+
+```{r Top 10 streams, message=FALSE, warning=FALSE}
+# Top 10 streams
+spotify %>% 
+  filter(Artist== "Taylor Swift") %>% 
+  select(Song_Name, Artist, Streams) %>% 
+  arrange(-Streams) %>% 
+  top_n(10) %>% 
+  kbl() %>% 
+  kable_paper(full_width= F) %>% 
+  row_spec(row= 1: 10, background= "#00A19D", color= "#FFF8E5")
+  
+```
+
+Except "You Belong With Me (Taylor's Version)", all other songs are from "evermore". My personal favorites in that album are "ivy" and "champagne problem".
+
+In conclusion, most of Taylor's albums, except for *Red* and *1989*, have low valence scores, which means her music tends to sounds less positive. But, that's not a correct point if we also consider lyrics. I'll try to analyze her lyrics in the future, though.
+Her songs score better in the scale of energy and danceability, with again, *1989* on the top and the following is *reputation*.
+
+From 2019-12-20 to 2021-07-23, Taylor got 52 songs appeared in Spotify Top 200 chart, outweighed all other artists, though only *cardigan* made its way to number 1. Another interesting thing is that her most streaming songs are not the ones that got a place in the top 10.
+
+Well, this is pretty much wrap up my analysis of Taylor on Spotify.
+
+# Youtube
+
+As mentioned above, I use `tuber` package to pull data from Youtube. The first time I got data from Taylor's channel, there were no music videos. All 188 rows are either behind the scene or her private videos and, it took me an hour to figure out that her music videos are entirely on her *TaylorSwiftVEVO*.
+
+There's unexpected data from her videos "Mine" and "The Best Day" as well. For unknown reasons, she suddenly took them down and replaced them with an HD version of each video 4 hours ago. So, the number of these two now is counted from the beginning. According to her fans, this might be an act from her old record label. Another data I also have to get rid of is "Change (Live)" since it's no longer available. Hence, I would like to exclude them from my analysis.
+
+```{r Taylor vevo filtered, echo= TRUE, message=FALSE, warning=FALSE}
+# Taylor vevo filtered
+taylor_channel <- read_csv("/Users/joypham/LearningData/LearningR/taylor_analysis/taylor_channel.csv", col_names= TRUE)
+
+taylor_vevo <- taylor_channel %>% 
+  subset(!(id %in% c("J21E6MecXTg", "X6kGV2mTbj8", "FMDVWSqALRs")))
+
+taylor_vevo$viewCount <- as.numeric(taylor_vevo$viewCount)
+taylor_vevo$likeCount <- as.numeric(taylor_vevo$likeCount)
+taylor_vevo$dislikeCount <- as.numeric(taylor_vevo$dislikeCount)
+taylor_vevo$commentCount <- as.numeric(taylor_vevo$commentCount)
+taylor_vevo$publication_date <-as.Date(taylor_vevo$publication_date)
+```
+
+```{r Taylor vevo structures, message=FALSE, warning=FALSE}
+# Taylor vevo structures
+str(taylor_vevo)
+```
+
+
+It looks good. Let's digging.
+
+## Views/ likes/ dislikes
+
+TalorSwiftVEVO has its first video uploaded in 2009 and, I'm curious about how many videos per year since then.
+
+```{r Videos per year, message=FALSE, warning=FALSE}
+# Videos per year
+taylor_vevo %>% 
+  group_by(publication_year= as.numeric(format(publication_date, "%Y"))) %>% 
+  summarize(videoCount= n()) %>% 
+   kbl %>% 
+  kable_paper(full_width = F) %>% 
+  row_spec(row= 1:13, background = "#90AACB", color = "#FFF8E5")
+```
+
+At a glance, it seems from 2019 to 2021, Taylor was able to produce a huge amount of videos; 52 videos in 2020 sounds like a vblogger. Yet, the truth is that most videos within these 3 years are either audio or lyrics videos. Here are the details:
+
+- 2012: Only 6 videos are actual music videos.
+- 2019: 17/30 videos are "Official Audio" or "lyric" from the album "Lover"
+- 2020: 31/ 52 are "Official Lyric Video" from "folklore" and "evermore". Only 4 of 52 are "Official Music Video"
+- 2021: Only 1/33 is considered "music video"
+
+Hence, with 11 videos, 2009 is the year where Taylor has the most actual music videos. 
+
+## Top views
+
+Let's see which of her videos have the most views.
+
+```{r Top 10 views, message=FALSE, warning=FALSE}
+# Top 10 views
+taylor_vevo %>% 
+  select(title, viewCount, likeCount) %>% 
+  arrange(-viewCount) %>% 
+  top_n(10) %>% 
+  kbl %>% 
+  kable_paper(full_width = F) %>% 
+  row_spec(row= 1:10, background = "#6D9886", color = "#FFF8E5")
+```
+
+
+6 out of 10 videos are from the "old Taylor" era, with the top 3 belong to *1989*. Comparing with the above popularity chart from Spotify, "Wildest Dreams" and "Look What You Made Me Do" are her truest hits.
+
+Now, I'm wondering if the number of views is proportional to the number of likes. Let's use a scatterplot to figure it out.
+
+```{r Views vs Likes, message=FALSE, warning=FALSE}
+# Views vs Likes
+taylor_vevo %>% 
+  group_by(title) %>% 
+  summarize(likes= likeCount/1000, dislikes= dislikeCount/1000, views= viewCount/100000) %>% 
+  ggplot(aes(x= views, y= likes, color= title)) +
+  geom_jitter(show.legend = FALSE) +
+  scale_color_viridis(discrete= TRUE, option="C") +
+  labs(title= "Likes versus Views") +
+  xlab("Views (x100 thousand)") +
+  ylab("Likes in thousand") +
+  theme_light()
+
+```
+
+It's clear that the more views a video has, the more likes it receives. And, how about the relation between likes, dislikes, and views?
+
+```{r LikesvsDislikescsView, message=FALSE, warning=FALSE}
+#LikesvsDislikescsView
+taylor_vevo %>% 
+  group_by(title) %>% 
+  summarize(likes= likeCount/1000, dislikes= dislikeCount/1000, views= viewCount/1000) %>% 
+  ggplot(aes(x= dislikes, y= likes, color= title, size= views)) +
+  geom_jitter(show.legend = FALSE, alpha= 0.5 ) +
+  scale_color_viridis(discrete= TRUE, option="D") +
+  labs(title= "Likes versus Dislikes versus Views") +
+  xlab("Dislikes in thousands") +
+  ylab("Likes in thousands") +
+  theme_light()
+```
+
+Though it seems to be a positive trend between these three variables, it's not consistent. There are some videos with a similar number of views but different in likes and dislikes.
+
+So, what are Taylor's **most hate videos**?
+
+```{r Most hate vids, message=FALSE, warning=FALSE}
+# Most hate vids
+taylor_vevo %>% 
+  select(title, dislikeCount, likeCount) %>% 
+  arrange(-dislikeCount) %>% 
+  top_n(10) %>% 
+  mutate(dislikesPercent = round(dislikeCount/likeCount, 3)*100) %>%
+  kbl %>% 
+  kable_paper(full_width = F) %>% 
+  row_spec(row= 1:10, background = "#6D9886", color = "#FFF8E5")
+```
+
+
+The most hate video award goes to "Look What You Made Me Do" with the highest dislikes per likes as well. It's no doubt that this is Taylor's most controversial song ever. Snake queen! In short, the top 10 most viewed videos of Taylor are all here with their ranks is the sole difference.
+
+To sum up, Taylor has 5 Youtube videos with over 1 million views and, 3 of them are from her Grammy-awarded *1989*. While placed 4th on the top viewed chart, *Look What You Make Me Do* is her most disliked video, which makes sense due to how bizarre and controversial this song is comparing with her music collection. 1st place for most-viewed video cannot keep *Shake It Off* from being second on dislikes. 
+
+Well, I think this is all for now. I'm going to sign up for an R programming course and will come back with more analysis.
+
+```{r}
+official_albums %>% 
+  group_by(album_id) %>% 
+  summarize(trackCount= n_distinct(album_id))
+```
+
