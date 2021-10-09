@@ -45,7 +45,7 @@ It's an intriguing feature of a song and, I want to know which of Taylor's album
 Also, it's bugging me if *valence* is indeed a good measurement of how happy a song is. So, I want to use this chance to test my theory about this value.
 
 ```{r Mean valence, message=FALSE, warning=FALSE}
-official_albums <- read_csv("/Users/joypham/LearningData/LearningR/spotify_extract/official_albums.csv", col_names = TRUE)
+official_albums <- read_csv("File path", col_names = TRUE)
 
 # Mean valence
 albums_mean_scores <- official_albums %>% 
@@ -200,7 +200,7 @@ In other to have a clearer look at how popular Taylor Swift is on Spotify, I'm g
 
 ```{r Loading Spotify top 200, echo=TRUE, message=FALSE, warning=FALSE}
 #Loading Spotify top 200
-spotify <- read_csv("/Users/joypham/LearningData/LearningR/top200_spotify_2020_2021/spotify_dataset.csv", col_names = TRUE)
+spotify <- read_csv("File path", col_names = TRUE)
 ```
 
 ### Songs in top 10
@@ -292,7 +292,7 @@ There's unexpected data from her videos "Mine" and "The Best Day" as well. For u
 
 ```{r Taylor vevo filtered, echo= TRUE, message=FALSE, warning=FALSE}
 # Taylor vevo filtered
-taylor_channel <- read_csv("/Users/joypham/LearningData/LearningR/taylor_analysis/taylor_channel.csv", col_names= TRUE)
+taylor_channel <- read_csv("File path", col_names= TRUE)
 
 taylor_vevo <- taylor_channel %>% 
   subset(!(id %in% c("J21E6MecXTg", "X6kGV2mTbj8", "FMDVWSqALRs")))
